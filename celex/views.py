@@ -1,4 +1,6 @@
 
+import csv
+
 from django.core.management import call_command
 from django.core.context_processors import csrf
 from django.contrib.auth.decorators import login_required
@@ -10,9 +12,8 @@ from django.core.files import File
 
 from .models import *
 from .forms import *
-from .utils import fetch_celex_resource
+from .helper import fetch_celex_resource
 
-import csv
 
 #old
 #call_command('reset','stimuli', interactive=False,verbosity=0)

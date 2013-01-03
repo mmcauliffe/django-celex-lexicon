@@ -6,9 +6,14 @@ setup.py
 celex/__init__.py
 celex/admin.py
 celex/forms.py
+celex/helper.py
+celex/managers.py
 celex/models.py
 celex/tests.py
 celex/urls.py
 celex/utils.py
 celex/views.py
+celex/media/__init__.py
+celex/media/constants.py
+celex/templates/celex/form.html
 celex/templates/celex/index.html

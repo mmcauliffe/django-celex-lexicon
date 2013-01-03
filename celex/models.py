@@ -1,26 +1,25 @@
 from django.db import models
-#from .managers import BulkManager
+from .managers import BulkManager,chunks
 import re
 
 # Create your models here.
-from .utils import fetch_celex_resource
+from .helper import fetch_celex_resource
 
 
-#class WordManager(BulkManager):
-#    tbl_name = 'stimuli_word'
-#    cols = ['File_id','Orthography','StressPattern','Frequency']
+class WordManager(BulkManager):
+    tbl_name = 'celex_word'
+    cols = ['FreqDict_id','Label','Category_id','Frequency']
 
 
+class TranscriptionManager(BulkManager):
+    tbl_name = 'celex_transcription'
+    cols = ['Transcription','Word_id']
 
-#class URManager(BulkManager):
-#    tbl_name = 'stimuli_underlying'
-#    cols = ['Word_id','SegmentType_id','Ordering']
+class SpellingManager(BulkManager):
+    tbl_name = 'celex_spelling'
+    cols = ['Label','Word_id']
 
-def chunks(l, n):
-    """ Yield successive n-sized chunks from l.
-    """
-    for i in xrange(0, len(l), n):
-        yield l[i:i+n]
+
 
 class FreqDict(models.Model):
     Name = models.CharField(max_length=100)

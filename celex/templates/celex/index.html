@@ -1,0 +1,12 @@
+{% extends "index.html" %}
+
+{% block title %}{{block.super}} - CELEX browser{% endblock %}
+
+{% block menu %}{{ block.super }}
+<ul>
+
+<li><a href="{% url celex.views.index %}">Index</a> </li>
+<span class="sep">|</span>
+<li><a href="{% url celex.views.reset %}">Reset</a></li>
+
+</ul>{% endblock %}

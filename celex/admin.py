@@ -4,14 +4,15 @@ from django.contrib import admin
 from .models import *
 from .forms import *
 
-#class SegmentTypeAdmin(admin.ModelAdmin):
-#    model = SegmentType
-#    list_display = ('Label','Syllabic','Obstruent','Nasal','Vowel')
 
-#admin.site.register(SegmentType, SegmentTypeAdmin)
+class LemmaAdmin(admin.ModelAdmin):
+    model = Lemma
+    list_display = ('label','get_spellings')
 
-class WordAdmin(admin.ModelAdmin):
-    model = Word
-    list_display = ('Label','getSpellings')
+admin.site.register(Lemma, LemmaAdmin)
 
-admin.site.register(Word, WordAdmin)
+class WordFormAdmin(admin.ModelAdmin):
+    model = WordForm
+    list_display = ('lemma','get_spellings','get_transcriptions')
+
+admin.site.register(WordForm, WordFormAdmin)

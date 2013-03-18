@@ -1,181 +1,137 @@
+import math
+
 from django.db import models
-from .managers import BulkManager,chunks
-import re
+from django.db.models import Sum
+
+
 
 # Create your models here.
+from .managers import BulkManager,chunks
 from .helper import fetch_celex_resource
 
-
-class WordManager(BulkManager):
-    tbl_name = 'celex_word'
-    cols = ['FreqDict_id','Label','Category_id','Frequency']
-
-
-class TranscriptionManager(BulkManager):
-    tbl_name = 'celex_transcription'
-    cols = ['Transcription','Word_id']
-
-class SpellingManager(BulkManager):
-    tbl_name = 'celex_spelling'
-    cols = ['Label','Word_id']
+UR_LOOKUP = """replace(
+                    replace(
+                        replace(
+                        transcription,'-',''
+                                ),'''',''
+                            ),'"',''
+                        )
+                    ~ %s"""
 
 
 
-class FreqDict(models.Model):
-    Name = models.CharField(max_length=100)
-    Description = models.CharField(max_length=250,blank=True,null=True)
+
+class SyntacticCategory(models.Model):
+    label = models.CharField(max_length=50)
+    description = models.CharField(max_length=100,blank=True,null=True)
+    category_type = models.CharField(max_length=100,blank=True,null=True)
 
     def __unicode__(self):
-        return u'%s' % self.Name
-
-    def getDir(self):
-        return fetch_celex_resource('%s/' % self.Name)
-
-    def loadInfo(self):
-        Word.objects.filter(FreqDict=self).delete()
-        #Dummy Segment loading
-        #st = SegmentType.objects.get_or_create(Label="A")[0]
-        #Category loading
-        SyntacticCategory.objects.all().delete()
-        self.loadCats()
-        lemmas = self.loadLemmas()
-        ss = []
-        ts = []
-        for key in lemmas:
-            if int(lemmas[key]['CategoryNum']) > 12:
-                continue
-            cat = SyntacticCategory.objects.get(pk=int(lemmas[key]['CategoryNum']))
-            w = Word.objects.create(pk=int(key),FreqDict=self,Label=lemmas[key]['Word'],Category=cat,Frequency=int(lemmas[key]['Freq']))
-            for spell in lemmas[key]['Spellings']:
-                ss.append(Spelling(Label=spell,Word=w))
-            for trans in lemmas[key]['Transcriptions']:
-                ts.append(Transcription(Transcription=trans,Word=w))
-        Spelling.objects.bulk_create(ss)
-        Transcription.objects.bulk_create(ts)
+        return self.label
 
 
-    def loadCats(self):
-        f = open(fetch_celex_resource('Category/cats.txt')).read().splitlines()
-        head = f.pop(0).split("\t")
-        cats = []
-        for line in f:
-            l = line.split("\t")
-            cats.append(SyntacticCategory(pk=int(l[0]),Label=l[1],Description=l[2],CategoryType=l[3]))
-        SyntacticCategory.objects.bulk_create(cats)
-
-    def loadLemmas(self):
-        lemmas = self.loadOrthLemmas()
-        lemmas = self.loadOrthWF(lemmas)
-        lemmas = self.loadTranscriptions(lemmas)
-        lemmas = self.addCategories(lemmas)
-        return lemmas
-
-    def loadOrthLemmas(self):
-        f = open(fetch_celex_resource('Orthography/celex-orthography-lemmas.txt')).read().splitlines()
-        out = {}
-        head = f.pop(0).split("\\")
-        for line in f:
-            l = line.split("\\")
-            spellings = [l[1]]
-            nl = {'Word':l[1],'Freq':l[2]}
-            if l[3] != '1':
-                for i in range(8,len(l)):
-                    if (i - 7) % 4 == 0:
-                        spellings.append(re.sub(r'-(?!-)',r'',l[i]))
-            nl['Spellings'] = set(spellings)
-            out[l[0]] = nl
-        return out
-
-    def loadOrthWF(self,lemmas):
-        f = open(fetch_celex_resource('Orthography/celex-orthography-wordforms.txt')).read().splitlines()
-        head = f.pop(0).split("\\")
-        for line in f:
-            l = line.split("\\")
-            spellings = [l[1]]
-            if l[4] != '1':
-                for i in range(9,len(l)):
-                    if (i - 8) % 5 == 0:
-                        spellings.append(re.sub(r'-(?!-)',r'',l[i]))
-            lemmas[l[3]]['Spellings'].update(set(spellings))
-        return lemmas
-
-    def loadTranscriptions(self,lemmas):
-        from .media.constants import CONVERSION
-        f = open(fetch_celex_resource('Phonology/celex-phonology-lemmas.txt')).read().splitlines()
-        head = f.pop(0).split("\\")
-        for line in f:
-            l = line.split("\\")
-            main = l[:8]
-            additional = l[8:]
-            trans = [main[5]]
-            if len(additional) != 0:
-                additional = chunks(additional,4)
-                trans.extend([x[1] for x in additional])
-            lemmas[l[0]]['Transcriptions'] = set(trans)
-        return lemmas
-
-
-    def addCategories(self,lemmas):
-        f = open(fetch_celex_resource('Category/celex-syntax-lemmas.txt')).read().splitlines()
-        head = f.pop(0).split("\\")
-        for line in f:
-            l = line.split("\\")
-            lemmas[l[0]]['CategoryNum'] = l[3]
-        return lemmas
-
-
-
-#class SegmentType(models.Model):
-#    Label = models.CharField(max_length=10)
-#    Syllabic = models.NullBooleanField()
-#    Obstruent = models.NullBooleanField()
-#    Nasal = models.NullBooleanField()
-#    Vowel = models.NullBooleanField()
-#
-#    def guessProperties(self):
-#        NasalInd = ['n','m']
-#        VowelInd = set(['i','u','o','e','a'])
-#        ApproxInd = ['r','l','y']
-#        for s in self.Label.lower():
-#            if s in VowelInd:
-#                self.Vowel = True
-#                break
-#        else:
-#            self.Vowel = False
-#        self.save()
-#
-#    def isSyllabic(self):
-#        return self.Syllabic
-#
-#    def isNasal(self):
-#        return self.Nasal
-#
-#    def isObs(self):
-#        return self.Obstruent
-#
-#    def isVowel(self):
-#        return self.Vowel
-#
-#    def __unicode__(self):
-#        return u'%s' % (self.Label,)
-#
-#
-#class Underlying(models.Model):
-#    Transcription = models.ForeignKey('Transcription')
-#    SegmentType = models.ForeignKey(SegmentType)
-#    Ordering = models.IntegerField()
-#
-#    objects = URManager()
-#
-#    class Meta:
-#        ordering = ['Ordering']
 
 
 class Transcription(models.Model):
-    Transcription = models.CharField(max_length=250)
-    StressPattern = models.CharField(max_length=100,blank=True,null=True)
-    CVSkel = models.CharField(max_length=100,blank=True,null=True)
-    Word = models.ForeignKey('Word')
+    transcription = models.CharField(max_length=250)
+    stress_pattern = models.CharField(max_length=100,blank=True,null=True)
+    cvskel = models.CharField(max_length=100,blank=True,null=True)
+    log_frequency = models.FloatField(blank=True,null=True)
+    neigh_den = models.IntegerField(blank=True,null=True)
+    fwnd = models.FloatField(blank=True,null=True)
+    sphone_prob = models.FloatField(blank=True,null=True)
+    biphone_prob = models.FloatField(blank=True,null=True)
+
+    def __unicode__(self):
+        return self.transcription
+
+    def strip_transcription(self):
+        return self.transcription.replace('-','').replace("'",'').replace('"','')
+
+    def get_frequency(self):
+        if self.log_frequency is not None:
+            return self.log_frequency
+        count = self.pronouncedas_set.all().aggregate(count = Sum('word_form__frequency'))['count']
+        if count is None:
+            count = 0.0
+        totCount = WordForm.objects.all().aggregate(totcount = Sum('frequency'))['totcount']
+        normed_freq = (float(count))/float(totCount)
+        log_freq = math.log((normed_freq * 1000000.0)+1.0,10)
+        self.log_frequency = log_freq
+        self.save()
+        return log_freq
+
+    def get_phono_prob(self):
+        if self.sphone_prob is not None and self.biphone_prob is not None:
+            return self.sphone_prob, self.biphone_prob
+        any_segment = '.'
+        patterns = []
+        SPprob = 0.0
+        BPprob = 0.0
+        phones = self.strip_transcription()
+        for i in range(len(phones)):
+            patt = [any_segment] * i
+            patt.append(phones[i])
+            pattern = '^'+''.join(patt) +'.*$'
+            totPattern = '^'+''.join([any_segment] * (i+1)) +'.*$'
+            count = Transcription.objects.extra(
+                    where = [UR_LOOKUP],
+                    params = [pattern])
+            totCount = Transcription.objects.extra(
+                    where = [UR_LOOKUP],
+                    params = [totPattern])
+            SPprob += float(sum([x.get_frequency()
+                                    for x in count])) / float(sum([x.get_frequency()
+                                                                    for x in totCount]))
+            if i != len(phones)-1:
+                patt = [any_segment] * i
+                patt.extend([phones[i],phones[i+1]])
+                pattern = '^'+''.join(patt) +'.*$'
+                totPattern = '^'+''.join([any_segment] * (i+2)) +'.*$'
+                count = Transcription.objects.extra(
+                    where = [UR_LOOKUP],
+                    params = [pattern])
+                totCount = Transcription.objects.extra(
+                    where = [UR_LOOKUP],
+                    params = [totPattern])
+                BPprob += float(sum([x.get_frequency()
+                                    for x in count])) / float(sum([x.get_frequency()
+                                                                    for x in totCount]))
+        SPprob = SPprob / float(len(phones))
+        BPprob = BPprob / float(len(phones)-1)
+        self.sphone_prob,self.biphone_prob = SPprob,BPprob
+        self.save()
+        return SPprob,BPprob
+
+
+    def get_neigh_densities(self):
+        if self.neigh_den is not None and self.fwnd is not None:
+            return self.neigh_den,self.fwnd
+        any_segment = '.'
+        phones = self.strip_transcription()
+        patterns = []
+        for i in range(len(phones)):
+            patt = phones[:i] #Substitutions
+            patt += any_segment
+            patt += phones[i+1:]
+            patterns.append('^'+''.join(patt) +'$')
+            patt = phones[:i] #Deletions
+            patt += phones[i+1:]
+            patterns.append('^'+''.join(patt) +'$')
+            patt = phones[:i] #Insertions
+            patt += any_segment
+            patt += phones[i:]
+            patterns.append('^'+''.join(patt) +'$')
+
+        neighs = Transcription.objects.extra(
+                    where = [UR_LOOKUP],
+                    params = ['|'.join(patterns)])
+        nd = len(neighs)
+        fwnd = sum([ x.get_frequency() for x in neighs])
+        self.neigh_den = nd
+        self.fwnd = fwnd
+        self.save()
+        return self.neigh_den,self.fwnd
 
     #def getCVStruct(self):
     #    if self.CVSkel is not None:
@@ -190,42 +146,100 @@ class Transcription(models.Model):
     #    self.save()
     #    return cvstruct
 
-class SyntacticCategory(models.Model):
-    Label = models.CharField(max_length=50)
-    Description = models.CharField(max_length=100,blank=True,null=True)
-    CategoryType = models.CharField(max_length=100,blank=True,null=True)
+class Orthography(models.Model):
+    spelling = models.CharField(max_length=250)
 
-#class CatRelationship(models.Model):
-#    Word = models.ForeignKey('Word')
-#    Category = models.ForeignKey(SyntacticCategory)
-#    Count = models.BigIntegerField(blank=True,null=True)
+    def get_frequency(self):
+        return self.spelledas_set.all().aggregate(count = Sum('frequency'))['count']
 
-#    class Meta:
-#        ordering = ['-Count']
-
-class Spelling(models.Model):
-    Label = models.CharField(max_length=250)
-    Word = models.ForeignKey('Word')
+    def get_probability(self):
+        return float(self.get_frequency())/float( SpelledAs.objects.all().aggregate(totcount = Sum('frequency'))['totcount'])
 
     def __unicode__(self):
-        return u'%s' % self.Label
+        return self.spelling
 
-class Word(models.Model):
-    FreqDict = models.ForeignKey(FreqDict)
-    Label = models.CharField(max_length=250)
-    Category = models.ForeignKey(SyntacticCategory)
-    Frequency = models.FloatField(blank=True,null=True)
-    ND = models.FloatField(blank=True,null=True)
-    FWND = models.FloatField(blank=True,null=True)
-    PhonoProb = models.FloatField(blank=True,null=True)
+class SpelledAs(models.Model):
+    word_form = models.ForeignKey('WordForm')
+    orthography = models.ForeignKey(Orthography)
+    frequency = models.FloatField(blank=True,null=True)
+
+class PronouncedAs(models.Model):
+    word_form = models.ForeignKey('WordForm')
+    transcription = models.ForeignKey(Transcription)
+
+class WordForm(models.Model):
+    lemma = models.ForeignKey('Lemma')
+    orthographies = models.ManyToManyField(Orthography,through = 'SpelledAs')
+    transcriptions = models.ManyToManyField(Transcription,through = 'PronouncedAs')
+    frequency = models.FloatField(blank=True,null=True)
+
+    def get_probability(self):
+        return float(self.frequency)/float(
+                WordForm.objects.all().aggregate(totcount =
+                                            Sum('frequency'))['totcount'])
+
+    def get_cond_prob_of_spelling(self,orth):
+        count = self.spelledas_set.filter(orthography=orth)[0].frequency
+        totcount = self.spelledas_set.all().aggregate(totcount = Sum('frequency'))['totcount']
+        if totcount == 0:
+            print self
+            print [(x.orthography,x.frequency) for x in self.spelledas_set.all()]
+        return float(count)/float(totcount)
+
+    def get_norm_frequency(self):
+        freq = math.log(
+                    (float(self.frequency) * 1000000)/float(WordForm.objects.all().aggregate(totcount = Sum('frequency'))['totcount']),10)
+        return freq
+
+    def get_neigh_density(self):
+        nd_sum = 0
+        fwnd_sum = 0.0
+        for t in self.transcriptions.all():
+            nd,fwnd = t.get_neigh_densities()
+            nd_sum += nd
+            fwnd_sum += fwnd
+        nd = float(nd_sum)/float(len(self.transcriptions.all()))
+        fwnd = float(fwnd_sum)/float(len(self.transcriptions.all()))
+        return nd,fwnd
+
+    def get_phono_prob(self):
+        sp_sum = 0
+        bp_sum = 0.0
+        for t in self.transcriptions.all():
+            sp,bp = t.get_phono_prob()
+            sp_sum += sp
+            bp_sum += bp
+        sp = float(sp_sum)/float(len(self.transcriptions.all()))
+        bp = float(bp_sum)/float(len(self.transcriptions.all()))
+        return sp,bp
+
+
+    def get_transcriptions(self):
+        return ".".join(str(t) for t in self.transcriptions.all())
+
+    def get_spellings(self):
+        return ", ".join(str(s) for s in self.orthographies.all())
+
+    def __unicode__(self):
+        return u'%s' % self.lemma.label
+
+class Lemma(models.Model):
+    label = models.CharField(max_length=250)
+    category = models.ForeignKey(SyntacticCategory)
+    frequency = models.FloatField(blank=True,null=True)
 
     #objects = WordManager()
+    def __unicode__(self):
+        return self.label
 
-    def getUR(self):
-        return ".".join(str(s) for s in Transcription.objects.filter(Word=self))
+    def get_transcriptions(self):
+        return ".".join(str(t) for wf in WordForm.objects.filter(lemma=self) for t in wf.transcriptions.all())
 
-    def getSpellings(self):
-        return ", ".join(str(s) for s in Spelling.objects.filter(Word=self))
+    def get_spelling_set(self):
+        return {str(s) for wf in WordForm.objects.filter(lemma=self) for s in wf.orthographies.all()}
+
+    def get_spellings(self):
+        return ", ".join(self.get_spelling_set())
 
     #def getPrimaryCategory(self):
     #    if self.PrimaryCategory is not None:

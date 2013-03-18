@@ -9,7 +9,7 @@ template_patterns = [
 
 setup(
     name='django-celex-lexicon',
-    version='0.1.7',
+    version='0.1.88',
     author='Michael McAuliffe',
     author_email='michael.e.mcauliffe@gmail.com',
     url='http://pypi.python.org/pypi/django-celex-lexicon/',

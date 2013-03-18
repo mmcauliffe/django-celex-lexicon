@@ -7,10 +7,18 @@ Replace this with more appropriate tests for your application.
 
 from django.test import TestCase
 
+from .utils import lookupCat,lookupFreq
 
-class SimpleTest(TestCase):
-    def test_basic_addition(self):
+class CatLookupTest(TestCase):
+    def test_lookup(self):
         """
-        Tests that 1 + 1 always equals 2.
+        Tests that category lookups equal expected values.
         """
-        self.assertEqual(1 + 1, 2)
+        self.assertEqual(lookupCat('test'),'N')
+
+class FreqLookupTest(TestCase):
+    def test_lookup(self):
+        """
+        Tests that frequency lookups equal expected values.
+        """
+        self.assertEqual(lookupFreq('test'), 2690)

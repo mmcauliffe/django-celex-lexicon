@@ -13,7 +13,7 @@ from django.core.files import File
 from .models import *
 from .forms import *
 from .helper import fetch_celex_resource
-
+from .tasks import doReset,doStringSelect,doNGramAnalysis
 
 #old
 #call_command('reset','stimuli', interactive=False,verbosity=0)
@@ -53,21 +53,38 @@ def index(request):
     return render(request,'celex/index.html',{})
 
 
+
 @login_required
 def reset(request):
     if request.user.is_superuser:
         if request.method == 'POST':
             form = ResetForm(request.POST)
             if form.is_valid() and form.cleaned_data['reset']:
-                c = FreqDict.objects.get_or_create(Name='CELEX')[0]
-                c.loadInfo()
+                doReset.delay()
                 return redirect(index)
-            else:
-                form = ResetForm()
-                render(request,'celex/form.html',{'form':form})
-        else:
-            form = ResetForm()
-            return render(request,'celex/form.html',{'form':form})
+        form = ResetForm()
+        return render(request,'celex/form.html',{'form':form})
+
+@login_required
+def string_selection(request):
+    if request.method == 'POST':
+        form = StringForm(request.POST)
+        if form.is_valid():
+            doStringSelect.delay(form.cleaned_data)
+            return redirect(index)
+    form = StringForm()
+    return render(request,'celex/form.html',{'form':form})
+
+@login_required
+def analyze_ngrams(request):
+    if request.method == 'POST':
+        form = ResetForm(request.POST)
+        if form.is_valid():
+            doNGramAnalysis.delay()
+            return redirect(index)
+    form = ResetForm()
+    return render(request,'celex/form.html',{'form':form})
+
 
 #def getFreqBreaks(qs):
     #freqs = sorted(qs.values_list('Frequency',flat=True))

@@ -9,6 +9,7 @@ celex/forms.py
 celex/helper.py
 celex/managers.py
 celex/models.py
+celex/tasks.py
 celex/tests.py
 celex/urls.py
 celex/utils.py
